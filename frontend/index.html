@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Shadowsocks</title>
+    <!-- Wails 运行时：提供 window.runtime.EventsOn 等 -->
+    <script src="/wails/runtime.js"></script>
+    <style>
+        /* ===== 主题变量 ===== */
+        :root, [data-theme="dark"] { --bg: #0b0b18; --card: #1a1a35; --card2: #12122a; --text: #e4e4ed; --text2: #9999b0; --text3: #6b6b85; --accent: #e94560; --green: #00d68f; --blue: #5b8af7; --border: #2a2a48; --border2: #1f1f3a; --danger: #ff3d71; --shadow: 0 2px 16px rgba(0, 0, 0, 0.4); --radius: 12px; --radius-sm: 8px; --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        [data-theme="light"] { --bg: #f5f5f9; --card: #fff; --card2: #f8f8fd; --text: #1a1a2e; --text2: #666680; --text3: #9999ab; --accent: #d63447; --green: #00a372; --blue: #3d6ef7; --border: #e2e2ed; --border2: #f0f0f8; --danger: #e6345d; --shadow: 0 2px 16px rgba(0, 0, 0, 0.08); }
+        * { margin: 0; padding: 0; box-sizing: border-box }
+        html { scroll-behavior: smooth }
+        body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; overflow: hidden; display: flex; justify-content: center; transition: background var(--transition), color var(--transition) }
+        #app { width: 100%; max-width: 616px; margin: 0 auto; padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 14px; height: 100vh; overflow: hidden }
+        
+        /* ===== 顶部标题栏 + 主题 & 状态 ===== */
+        .header { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 12px }
+        .header-brand { display: flex; align-items: center; gap: 10px }
+        .header-icon { width: 42px; height: 42px; border-radius: var(--radius-sm); background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; flex-shrink: 0 }
+        .header-title { font-size: 20px; font-weight: 800; letter-spacing: 0.5px }
+        .header-right { display: flex; align-items: center; gap: 16px }
+        .status-widget { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; background: var(--card2); border: 1.5px solid var(--border); transition: all var(--transition); cursor: default }
+        .status-widget.on { border-color: var(--green); background: rgba(0, 214, 143, 0.06) }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text3); flex-shrink: 0; transition: var(--transition) }
+        .status-dot.on { background: var(--green); box-shadow: 0 0 10px rgba(0, 214, 143, 0.5); animation: breathe 2.5s ease-in-out infinite }
+
+        @keyframes breathe {
+            0%, 100% { box-shadow: 0 0 6px rgba(0, 214, 143, 0.3) }
+            50% { box-shadow: 0 0 16px rgba(0, 214, 143, 0.7) }
+        }
+
+        .status-label { font-size: 13px; font-weight: 600; color: var(--text2) }
+        .status-label.on { color: var(--green) }
+        .theme-switch { display: flex; background: var(--card2); border: 1.5px solid var(--border); border-radius: 20px; padding: 3px }
+        .theme-btn { width: 34px; height: 30px; border: none; background: transparent; border-radius: 17px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: var(--transition); color: var(--text3) }
+        .theme-btn.active { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(233, 69, 96, 0.3) }
+        
+        /* ===== 卡片 ===== */
+        .card { background: var(--card); border-radius: var(--radius); padding: 20px; border: 1.5px solid var(--border); box-shadow: var(--shadow); transition: var(--transition) }
+        .card-header { display: flex; justify-content: space-between; align-items: center; }
+        .card-title { font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--accent) }
+        .card-body { gap: 12px; margin-top: 14px; }
+
+        /* 端口行 */
+        .port-row { display: flex; align-items: center; gap: 12px }
+        .port-label { font-size: 14px; color: var(--text2); font-weight: 600; width: 56px; text-align: right; flex-shrink: 0 }
+        .port-input { width: 88px; padding: 9px 12px; background: var(--bg); border: 1.5px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 15px; text-align: center; outline: none; font-weight: 600; transition: var(--transition) }
+        .port-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1) }
+        .address-tag { display: inline-flex; align-items: center; gap: 4px; padding: 7px 13px; background: var(--bg); border: 1.5px solid var(--border2); border-radius: var(--radius-sm); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 14px; color: var(--green); font-weight: 500 }
+        .address-tag::before { content: '\2192 '; color: var(--text3); font-size: 11px }
+        .card-hint { font-size: 12px; color: var(--text3); margin-top: 10px; line-height: 1.6 }
+        
+        /* ===== 按钮 ===== */
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 20px; border-radius: var(--radius-sm); border: none; cursor: pointer; font-size: 14px; font-weight: 600; transition: var(--transition); white-space: nowrap; font-family: var(--font); letter-spacing: 0.3px }
+        .btn:active { transform: scale(0.97) }
+        .btn-p { background: var(--accent); color: #fff }
+        .btn-p:hover { filter: brightness(1.1); box-shadow: 0 4px 12px rgba(233, 69, 96, 0.25) }
+        .btn-g { background: var(--green); color: #0b0b18 }
+        .btn-g:hover { filter: brightness(1.1); box-shadow: 0 4px 12px rgba(0, 214, 143, 0.25) }
+        .btn-r { background: var(--danger); color: #fff }
+        .btn-r:hover { filter: brightness(1.1) }
+        .btn-ghost { background: transparent; color: var(--text2); border: none }
+        .btn-ghost:hover { color: var(--accent) }
+        .btn-sm { padding: 7px 14px; font-size: 13px; border-radius: 6px }
+        
+        /* ===== 服务器列表 ===== */
+        .server-card { display: flex; align-items: center; gap: 12px; padding: 8px 12px; margin-bottom: 6px; background: var(--bg); border-radius: var(--radius-sm); border: 1.5px solid var(--border); transition: var(--transition); cursor: default }
+        .server-card:last-child { margin-bottom: 0 }
+        .server-card:hover { border-color: var(--text3) }
+        .server-card.active { border-color: var(--green); background: rgba(0, 214, 143, 0.03) }
+        .server-icon { width: 40px; height: 40px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; background: var(--border2) }
+        .server-card.active .server-icon { background: rgba(0, 214, 143, 0.12) }
+        .server-info { flex: 1; min-width: 0 }
+        .server-name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px }
+        .server-detail { font-size: 12px; color: var(--text2); margin-top: 4px; display: flex; gap: 8px; align-items: center }
+        .tag-method { display: inline-block; padding: 2px 7px; background: var(--border2); border-radius: 4px; font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace; color: var(--text3) }
+        .tag-online { display: inline-block; padding: 2px 9px; border-radius: 5px; font-size: 11px; font-weight: 700; background: rgba(0, 214, 143, 0.1); color: var(--green) }
+        .server-actions { display: flex; gap: 4px }
+        .empty-state { text-align: center; padding: 32px 20px }
+        .empty-icon { font-size: 40px; margin-bottom: 10px; opacity: 0.4 }
+        .empty-text { color: var(--text3); font-size: 14px; margin-bottom: 14px }
+        
+        /* ===== 弹窗 ===== */
+        .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(2px) }
+        .overlay.show { display: flex }
+        .panel { background: var(--card); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 420px; border: 1.5px solid var(--border); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); animation: slideIn 0.2s ease-out }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(12px) scale(0.98) }
+            to { opacity: 1; transform: translateY(0) scale(1) }
+        }
+
+        .panel-header { margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between }
+        .panel-title { font-size: 18px; font-weight: 700; color: var(--accent) }
+        .panel-close { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--border); background: transparent; color: var(--text2); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: var(--transition) }
+        .panel-close:hover { border-color: var(--accent); color: var(--accent) }
+        .form-group { margin-bottom: 14px }
+        .form-group label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px }
+        .form-input { width: 100%; padding: 11px 14px; background: var(--bg); border: 1.5px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 15px; outline: none; font-family: var(--font); transition: var(--transition) }
+        .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.08) }
+        select.form-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%23999' stroke-width='1.5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px }
+        .panel-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1.5px solid var(--border2) }
+        .confirm-body { text-align: center; padding: 8px 0 }
+        .confirm-icon { font-size: 36px; margin-bottom: 10px }
+        .confirm-msg { font-size: 14px; color: var(--text2); line-height: 1.6 }
+        .confirm-name { font-weight: 700; color: var(--text); font-size: 15px }
+
+        @media(max-width:480px) {
+            #app { padding: 16px 12px 32px }
+            .card { padding: 14px }
+            .server-actions .btn { padding: 4px 8px; font-size: 10px }
+            .theme-btn { width: 28px; height: 26px; font-size: 11px }
+        }
+        .collapse-toggle { cursor: pointer; user-select: none }
+        .collapse-arrow { display: inline-block; transition: transform 0.25s; margin-right: 4px; font-size: 11px }
+        .collapse-arrow.open { transform: rotate(90deg) }
+        .card-body.collapsed { display: none !important }
+        .server-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 4px }
+        .server-scroll::-webkit-scrollbar { width: 4px } .server-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px }
+        .log-panel { background: #06060f; border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; flex: 1; min-height: 0; overflow-y: auto; font-family: 'SF Mono','Fira Code','Consolas',monospace; font-size: 11px; line-height: 1.7; color: #ffffff; white-space: pre-wrap; word-break: break-all }
+        .log-panel::-webkit-scrollbar { width: 4px } .log-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="header">
+            <div class="header-brand">
+                <div class="header-icon">&#x1f510;</div>
+                <div class="header-title">Shadowsocks</div>
+            </div>
+            <div class="header-right">
+                <div class="status-widget" id="statusWidget">
+                    <div class="status-dot" id="dot"></div><span class="status-label" id="st">未连接</span>
+                </div>
+                <button class="btn btn-g" id="toggleBtn" onclick="toggle()">启动代理</button>
+                <div class="theme-switch">
+                    <button class="theme-btn active" data-theme="dark" onclick="setTheme('dark')"
+                            title="深色模式">
+                        &#x1f319;
+                    </button>
+                    <button class="theme-btn" data-theme="light" onclick="setTheme('light')"
+                            title="浅色模式">
+                        &#x2600;&#xfe0f;
+                    </button>
+                    <button class="theme-btn" data-theme="auto" onclick="setTheme('auto')"
+                            title="跟随系统">
+                        &#x1f4a1;
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+                <span class="card-title">&#x2699;&#xfe0f; 代理设置</span>
+                <button class="btn btn-p btn-sm" onclick="savePort()">保存端口</button>
+            </div>
+            <div class="card-body">
+                <div class="port-row" style="margin-bottom:10px">
+                    <span class="port-label">HTTP</span>
+                    <input class="port-input" id="hp" type="number" value="8899" min="1" max="65535">
+                    <span class="address-tag" id="hat">127.0.0.1:8899</span>
+                </div>
+                <div class="port-row">
+                    <span class="port-label">SOCKS5</span>
+                    <input class="port-input" id="sp" type="number" value="1080" min="1" max="65535">
+                    <span class="address-tag" id="sat">127.0.0.1:1080</span>
+                </div>
+                <div class="card-hint">HTTP 端口用于系统代理，SOCKS5 端口供其他应用使用。启动/停止时自动配置 Windows 系统代理。</div>
+            </div>
+        </div>
+
+        <div class="card" style="display:flex;flex-direction:column;flex:1;min-height:0" id="serverCard">
+            <div class="card-header" style="flex-shrink:0">
+                <span class="card-title collapse-toggle" onclick="toggleCard('server')">
+                    <span class="collapse-arrow open" id="serverArrow">▶</span>&#x1f310; 节点管理
+                </span>
+                <button class="btn btn-p btn-sm" onclick="openAdd()">+ 添加节点</button>
+            </div>
+            <div class="card-body" id="serverBody" style="display:flex;flex-direction:column;flex:1;min-height:0">
+                <div class="server-scroll" id="sl"></div>
+            </div>
+        </div>
+
+        <div class="card" style="display:flex;flex-direction:column;flex:0 0 auto;min-height:0" id="logCard">
+            <div class="card-header" style="flex-shrink:0">
+                <span class="card-title collapse-toggle" onclick="toggleCard('log')">
+                    <span class="collapse-arrow" id="logArrow">▶</span>📋 运行日志
+                </span>
+                <button class="btn btn-sm" style="background:var(--border2);color:var(--text2)" onclick="clearLogs()">🗑️ 清空日志</button>
+            </div>
+            <div class="card-body collapsed" id="logBody" style="display:flex;flex-direction:column;flex:1;min-height:0">
+                <div class="log-panel" id="logPanel"><div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px">暂无日志</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="modal">
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title" id="modalTitle">添加服务器</span><button class="panel-close"
+                                                                              onclick="closeModal()">
+                    &#x2715;
+                </button>
+            </div>
+            <div class="form-group"><label>节点名称</label><input class="form-input" id="mn" placeholder="例如：东京-01"></div>
+            <div class="form-group"><label>服务器地址</label><input class="form-input" id="ms" placeholder="IP 地址或域名"></div>
+            <div class="form-group">
+                <label>端口</label><input class="form-input" id="mp" type="number" placeholder="8388">
+            </div>
+            <div class="form-group">
+                <label>密码</label><input class="form-input" id="pw" type="password"
+                                        placeholder="输入 Shadowsocks 密码">
+            </div>
+            <div class="form-group">
+                <label>加密方式</label><select class="form-input" id="mm">
+                    <option>aes-256-gcm</option>
+                    <option>aes-128-gcm</option>
+                    <option>chacha20-ietf-poly1305</option>
+                    <option>chacha20-poly1305</option>
+                    <option>aes-256-cfb</option>
+                </select>
+            </div>
+            <div class="panel-actions">
+                <button class="btn btn-ghost btn-sm" onclick="closeModal()">取消</button><button class="btn btn-p btn-sm" onclick="saveModal()">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="cfm">
+        <div class="panel" style="max-width:340px">
+            <div class="confirm-body">
+                <div class="confirm-icon">&#x26a0;&#xfe0f;</div>
+                <div class="confirm-msg">确认删除节点<br><span class="confirm-name" id="confirmName"></span></div>
+            </div>
+            <div class="panel-actions" style="justify-content:center;border-top:none;margin-top:16px;padding-top:0">
+                <button class="btn btn-ghost btn-sm" onclick="closeCfm()">取消</button><button class="btn btn-r btn-sm"
+                                                                                             onclick="doDel()">
+                    确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== 主题管理 =====
+        var currentTheme = 'dark';
+
+        function setTheme(t) {
+            currentTheme = t;
+            if (t === 'auto') {
+                var m = window.matchMedia('(prefers-color-scheme:dark)');
+                document.documentElement.setAttribute('data-theme', m.matches ? 'dark' : 'light');
+                m.addEventListener('change', function (e) {
+                    document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+                });
+            } else {
+                document.documentElement.setAttribute('data-theme', t);
+            }
+            document.querySelectorAll('.theme-btn').forEach(function (b) {
+                b.classList.toggle('active', b.dataset.theme === t);
+            });
+            try { localStorage.setItem('ss-theme', t); } catch (e) { }
+        }
+
+        try {
+            var saved = localStorage.getItem('ss-theme');
+            if (saved) setTheme(saved);
+        } catch (e) { }
+
+        // ===== 全局状态 =====
+        var editIdx = -1;
+        var deleteIdx = -1;
+        var servers = [];
+
+        function esc(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // ===== API 绑定 =====
+        // 所有后端调用统一通过 window.go.main.App.XXX（wails build 自动生成）
+        // 这里仅做一层错误捕获，返回 {error} 形式以保留 UI 调用方式
+        async function call(fn, ...args) {
+            try {
+                if (!window.go || !window.go.main || !window.go.main.App) {
+                    return { error: 'Wails 绑定尚未就绪，请稍后重试' };
+                }
+                if (typeof fn === 'string') fn = window.go.main.App[fn];
+                if (typeof fn !== 'function') return { error: '未找到绑定方法' };
+                var ret = await fn.apply(window.go.main.App, args);
+                // Go (T, error) 多返回值在 JS 端会是 [T, error]
+                if (Array.isArray(ret) && ret.length === 2 && ret[1] instanceof Error) {
+                    return { error: ret[1].message };
+                }
+                return ret || {};
+            } catch (e) {
+                return { error: e.message };
+            }
+        }
+
+        // ===== 渲染 =====
+        async function refresh() {
+            var s = await call('GetStatus');
+            if (s.error) { console.error(s.error); return; }
+            var hp = s.http_port || 8899;
+            var sp = s.socks_port || 1080;
+            servers = s.servers || [];
+
+            document.getElementById('hp').value = hp;
+            document.getElementById('sp').value = sp;
+            document.getElementById('hat').textContent = '127.0.0.1:' + hp;
+            document.getElementById('sat').textContent = '127.0.0.1:' + sp;
+
+            var list = document.getElementById('sl');
+            if (!servers.length) {
+                list.innerHTML =
+                    '<div class="empty-state">' +
+                    '<div class="empty-icon">📡</div>' +
+                    '<div class="empty-text">暂无节点，请添加 Shadowsocks 服务器</div>' +
+                    '<button class="btn btn-p btn-sm" onclick="openAdd()">添加第一个节点</button>' +
+                    '</div>';
+            } else {
+                list.innerHTML = servers.map(function (v, i) {
+                    var active = i === s.active_idx && s.running;
+                    var html = '<div class="server-card' + (active ? ' active' : '') + '">';
+                    html += '<div class="server-icon">' + (active ? '\u{1f7e2}' : '\u{26aa}') + '</div>';
+                    html += '<div class="server-info">';
+                    html += '<div class="server-name">' + esc(v.name);
+                    if (active) html += ' <span class="tag-online">已连接</span>';
+                    html += '</div>';
+                    html += '<div class="server-detail">' + esc(v.server) + ':' + v.port + ' <span class="tag-method">' + esc(v.method) + '</span></div>';
+                    html += '</div>';
+                    html += '<div class="server-actions">';
+                    if (active) {
+                        html += '<button class="btn btn-g btn-sm" disabled>使用中</button>';
+                    } else {
+                        html += '<button class="btn btn-g btn-sm" onclick="switchServer(' + i + ')">连接</button>';
+                    }
+                    html += ' <button class="btn btn-ghost btn-sm" onclick="editServer(' + i + ')">✎</button>';
+                    html += ' <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="askDelete(' + i + ')">✕</button>';
+                    html += '</div></div>';
+                    return html;
+                }).join('');
+            }
+
+            var widget = document.getElementById('statusWidget');
+            var dot = document.getElementById('dot');
+            var label = document.getElementById('st');
+            var btn = document.getElementById('toggleBtn');
+
+            if (s.running) {
+                widget.className = 'status-widget on';
+                dot.className = 'status-dot on';
+                label.className = 'status-label on';
+                label.textContent = '已连接';
+                btn.textContent = '停止代理';
+                btn.className = 'btn btn-r';
+            } else {
+                widget.className = 'status-widget';
+                dot.className = 'status-dot';
+                label.className = 'status-label';
+                label.textContent = '未连接';
+                btn.textContent = '启动代理';
+                btn.className = 'btn btn-g';
+            }
+        }
+
+        // ===== 添加/编辑弹窗 =====
+        function openAdd() {
+            editIdx = -1;
+            document.getElementById('modalTitle').textContent = '添加服务器';
+            clearForm();
+            document.getElementById('modal').classList.add('show');
+        }
+
+        // 表单字段映射：后端字段名 → [元素id, 默认值]
+        // 所有表单读写统一用这一张表，避免 5 个字段在多处重复写
+        var formFields = {
+            name: ['mn', ''],
+            server: ['ms', ''],
+            port: ['mp', ''],
+            password: ['pw', ''],
+            method: ['mm', 'aes-256-gcm']
+        };
+
+        // 按映射表把对象数据写进表单（缺省补默认值）
+        function setForm(data) {
+            data = data || {};
+            Object.keys(formFields).forEach(function (k) {
+                var pair = formFields[k];
+                document.getElementById(pair[0]).value = data[k] != null ? data[k] : pair[1];
+            });
+        }
+
+        // 按映射表读取表单，构造后端对象
+        // 数字字段自动转 int
+        function getForm() {
+            var data = {};
+            Object.keys(formFields).forEach(function (k) {
+                var el = document.getElementById(formFields[k][0]);
+                data[k] = k === 'port' ? (parseInt(el.value) || 0) : el.value.trim();
+            });
+            return data;
+        }
+
+        function editServer(i) {
+            editIdx = i;
+            setForm(servers[i] || {});
+            document.getElementById('modalTitle').textContent = '编辑服务器';
+            document.getElementById('modal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('show');
+        }
+
+        function clearForm() { setForm({}); }
+
+        async function saveModal() {
+            var data = getForm();
+            data.idx = editIdx;
+            if (!data.name || !data.server || !data.port || !data.password) {
+                alert('请完整填写所有字段');
+                return;
+            }
+            var r = await call('SaveServer', data);
+            if (r.error) alert(r.error);
+            else closeModal();
+            refresh();
+        }
+
+        // ===== 确认删除弹窗 =====
+        function askDelete(i) {
+            deleteIdx = i;
+            try {
+                var name = document.querySelectorAll('.server-card')[i].querySelector('.server-name').textContent.trim().split(' ')[0];
+                document.getElementById('confirmName').textContent = name;
+            } catch (e) { }
+            document.getElementById('cfm').classList.add('show');
+        }
+
+        function closeCfm() {
+            document.getElementById('cfm').classList.remove('show');
+        }
+
+        async function doDel() {
+            if (deleteIdx >= 0) await call('DeleteServer', deleteIdx);
+            closeCfm();
+            refresh();
+        }
+
+        // ===== 操作按钮 =====
+        async function switchServer(i) {
+            var r = await call('SwitchServer', i);
+            if (r.error) alert(r.error);
+            refresh();
+        }
+
+        async function toggle() {
+            var r = await call('ToggleProxy');
+            if (r.error) { alert(r.error); refresh(); return; }
+            refresh();
+        }
+
+        async function savePort() {
+            var hp = parseInt(document.getElementById('hp').value) || 8899;
+            var sp = parseInt(document.getElementById('sp').value) || 1080;
+            await call('SaveConfig', hp, sp);
+            refresh();
+        }
+
+        // ===== 全局快捷键 =====
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { closeModal(); closeCfm(); }
+        });
+
+        ['modal', 'cfm'].forEach(function (id) {
+            document.getElementById(id).addEventListener('click', function (e) {
+                if (e.target === this) this.classList.remove('show');
+            });
+        });
+
+        var logLines = [];
+        var logPanel = document.getElementById('logPanel');
+
+        function renderLogs() {
+            if (!logLines.length) {
+                logPanel.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px">暂无日志</div>';
+            } else {
+                logPanel.textContent = logLines.join('\n');
+                logPanel.scrollTop = logPanel.scrollHeight;
+            }
+        }
+
+        // Wails 事件：实时日志推送（App 把 proxy 日志事件转发到这里）
+        // runtime 由 Wails 注入。runtime.js 可能尚未就绪，做一次轻量重试
+        function bindLogs() {
+            if (window.runtime && window.runtime.EventsOn) {
+                window.runtime.EventsOn('log', function (msg) {
+                    logLines.push(msg);
+                    if (logLines.length > 50) logLines = logLines.slice(-50);
+                    renderLogs();
+                });
+                // 托盘菜单触发代理切换后通知前端刷新
+                window.runtime.EventsOn('tray-action', function () { refresh(); });
+            } else {
+                setTimeout(bindLogs, 200);
+            }
+        }
+        bindLogs();
+
+        refresh();
+
+        async function clearLogs() {
+            logLines = [];
+            renderLogs();
+        }
+
+        function toggleCard(type) {
+            var sCard = document.getElementById('serverCard');
+            var sBody = document.getElementById('serverBody');
+            var sArrow = document.getElementById('serverArrow');
+            var lCard = document.getElementById('logCard');
+            var lBody = document.getElementById('logBody');
+            var lArrow = document.getElementById('logArrow');
+
+            var sOpen = !sBody.classList.contains('collapsed');
+            var lOpen = !lBody.classList.contains('collapsed');
+
+            if (type === 'server') {
+                if (sOpen) {
+                    sBody.classList.add('collapsed'); sArrow.classList.remove('open');
+                    sCard.style.flex = '0 0 auto';
+                } else {
+                    sBody.classList.remove('collapsed'); sArrow.classList.add('open');
+                    sCard.style.flex = '1';
+                    lBody.classList.add('collapsed'); lArrow.classList.remove('open');
+                    lCard.style.flex = '0 0 auto';
+                }
+            } else {
+                if (lOpen) {
+                    lBody.classList.add('collapsed'); lArrow.classList.remove('open');
+                    lCard.style.flex = '0 0 auto';
+                } else {
+                    lBody.classList.remove('collapsed'); lArrow.classList.add('open');
+                    lCard.style.flex = '1';
+                    sBody.classList.add('collapsed'); sArrow.classList.remove('open');
+                    sCard.style.flex = '0 0 auto';
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>

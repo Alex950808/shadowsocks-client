@@ -1,0 +1,24 @@
+# Wails 构建产物
+build/
+
+# Go
+*.exe
+*.exe~
+*.test
+*.out
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# 配置（包含服务器密码等敏感信息，不应提交）
+# 如需团队共享模板，可提交 config.json.example
+~/.shadowsocks-client/
