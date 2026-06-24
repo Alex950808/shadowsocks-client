@@ -26,7 +26,7 @@ func main() {
 	err := wails.Run(&options.App{
 		Title:         "Shadowsocks",
 		Width:         640,
-		Height:        680,
+		Height:        720,
 		DisableResize: false,
 		AssetServer: &assetserver.Options{
 			Assets: frontendAssets,
