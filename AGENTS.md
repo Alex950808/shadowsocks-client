@@ -7,7 +7,7 @@
 ## Project Identity
 
 - **Type**: Wails v2.12.0 + Go 1.25 desktop app (Go backend + WebView2 frontend)
-- **Binary**: `build\bin\wireguard.exe` (~8MB after UPX; contains ~9MB embedded mmdb) — intentional camouflage, NOT related to WireGuard protocol
+- **Binary**: `build\bin\shadowsocks-client.exe` (~8MB after UPX; contains ~9MB embedded mmdb)
 - **Title**: "Shadowsocks"
 - **Window**: 640×790, non-resizable, dark `#0F0F1A` background; minimises to system tray on close
 
@@ -22,7 +22,7 @@ wails dev
 
 # 仅编译不压缩（调试用）
 wails build
-# → build\bin\wireguard.exe (~20MB, no UPX)
+# → build\bin\shadowsocks-client.exe (~20MB, no UPX)
 ```
 
 `build.ps1` 会先 `wails build`，再调用 UPX `--best` 压缩到 ~8MB。UPX 路径：`$env:USERPROFILE\upx\upx-4.2.4-win64\upx.exe`。
@@ -142,15 +142,14 @@ Decision order in `shouldBypass(host)` (any match → **直连** / direct):
 ## Pitfalls
 
 1. ⚠️ **`wails build` is mandatory, not `go build`**. `go build` skips binding regeneration (`App.js`) and asset embedding — UI will break silently (no `window.go.main.App` methods).
-2. ⚠️ **Process name == exe file name** (Windows). `outputfilename: "wireguard"` → process is `wireguard.exe` / Task Manager shows `wireguard`. Renaming the file changes the process name; you cannot keep two different names without self-copy/restart tricks.
-3. ⚠️ **`wireguard` is camouflage** — has nothing to do with the WireGuard protocol.
-4. ⚠️ **System proxy via Windows registry** (`internal/proxy/system.go`), NOT PowerShell. `SetSystemProxy` writes `ProxyEnable=1` + `ProxyServer=127.0.0.1:<HttpPort>` + `ProxyOverride` LAN list.
-5. ⚠️ **✕ / Alt+F4 hides to tray** (`HideWindowOnClose:true` in `main.go`), does NOT exit. The only clean exit is the tray menu → "退出" → `runtime.Quit` → `OnShutdown` (stops proxy, restores registry, saves config) → `systray.Quit`. Task Manager *End Task* / `taskkill /F` skips cleanup.
-6. ⚠️ **`log.Printf` is invisible in the release GUI** (no console). Use `addLog()` for user-facing messages. To see stderr during dev, launch from a terminal (`wails dev` or `& path\to\wireguard.exe`) or wrap: `cmd /c "wireguard.exe 2>&1"`.
-7. ⚠️ **CGO is mandatory** on Windows for Wails/WebView2 + systray (`energye/systray` uses `user32.dll`). `CGO_ENABLED=0` will break the build.
-8. ⚠️ **`geoip2-golang` v2 API differs from v1**. Import path is `github.com/oschwald/geoip2-golang/v2`. Use `OpenBytes` (not `FromBytes`), pass `netip.Addr` (not `net.IP`), read field `ISOCode` (not `IsoCode`). Mixing v1-style code will not compile.
-9. ⚠️ **Get the module name right**: it is `oschwald` (not `oschian`/`oschwald` variants). Wrong author name produces confusing 404s on goproxy.cn.
-10. ⚠️ **mmdb binary lives at `internal/proxy/data/GeoLite2-Country.mmdb`** (~9MB). Do not move it — `geoip.go`'s `//go:embed data/...` is resolved relative to that file's directory.
+2. ⚠️ **Process name == exe file name** (Windows). `outputfilename: "shadowsocks-client"` → process is `shadowsocks-client.exe` / Task Manager shows `shadowsocks-client`. Renaming the file changes the process name; you cannot keep two different names without self-copy/restart tricks.
+3. ⚠️ **System proxy via Windows registry** (`internal/proxy/system.go`), NOT PowerShell. `SetSystemProxy` writes `ProxyEnable=1` + `ProxyServer=127.0.0.1:<HttpPort>` + `ProxyOverride` LAN list.
+4. ⚠️ **✕ / Alt+F4 hides to tray** (`HideWindowOnClose:true` in `main.go`), does NOT exit. The only clean exit is the tray menu → "退出" → `runtime.Quit` → `OnShutdown` (stops proxy, restores registry, saves config) → `systray.Quit`. Task Manager *End Task* / `taskkill /F` skips cleanup.
+5. ⚠️ **`log.Printf` is invisible in the release GUI** (no console). Use `addLog()` for user-facing messages. To see stderr during dev, launch from a terminal (`wails dev` or `& path\to\shadowsocks-client.exe`) or wrap: `cmd /c "shadowsocks-client.exe 2>&1"`.
+6. ⚠️ **CGO is mandatory** on Windows for Wails/WebView2 + systray (`energye/systray` uses `user32.dll`). `CGO_ENABLED=0` will break the build.
+7. ⚠️ **`geoip2-golang` v2 API differs from v1**. Import path is `github.com/oschwald/geoip2-golang/v2`. Use `OpenBytes` (not `FromBytes`), pass `netip.Addr` (not `net.IP`), read field `ISOCode` (not `IsoCode`). Mixing v1-style code will not compile.
+8. ⚠️ **Get the module name right**: it is `oschwald` (not `oschian`/`oschwald` variants). Wrong author name produces confusing 404s on goproxy.cn.
+9. ⚠️ **mmdb binary lives at `internal/proxy/data/GeoLite2-Country.mmdb`** (~9MB). Do not move it — `geoip.go`'s `//go:embed data/...` is resolved relative to that file's directory.
 
 ## Key Files
 
@@ -161,7 +160,7 @@ Decision order in `shouldBypass(host)` (any match → **直连** / direct):
 | `tray.go` | system tray (energye/systray): icon, menu (show/toggle/quit) |
 | `assets.go` | `//go:embed all:frontend` |
 | `errors.go` | shared sentinel errors |
-| `wails.json` | name, `outputfilename: "wireguard"`, empty frontend hooks (no npm) |
+| `wails.json` | name, `outputfilename: "shadowsocks-client"`, empty frontend hooks (no npm) |
 | `build.ps1` | 一键构建：`wails build` + UPX `--best` 压缩 → ~8MB |
 | `internal/proxy/proxy.go` | HTTP CONNECT + SOCKS5 + SS encrypt + log bus, per-connection logging |
 | `internal/proxy/bypass.go` | split routing (`shouldBypass` / `isLanHost` / `isCNDomainSuffix` / `directRelay*` / `relay`) |
