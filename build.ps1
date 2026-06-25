@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 
 $upx = "$env:USERPROFILE\upx\upx-4.2.4-win64\upx.exe"
-$bin = "build\bin\wireguard.exe"
+$bin = "build\bin\shadowsocks-client.exe"
 
 Write-Host "=== wails build ===" -ForegroundColor Cyan
 wails build
